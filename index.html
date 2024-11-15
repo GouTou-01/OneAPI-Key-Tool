@@ -11,7 +11,7 @@
             color: #333;
             max-width: 100%;
             margin: 0;
-            padding: 20px;
+            padding: 30px;
             background-color: #f4f4f4;
             display: block;
             min-height: 100vh;
@@ -67,6 +67,7 @@
         }
         button:disabled {
             background-color: gray;
+            cursor: not-allowed;
         }
         .table-container {
             overflow-x: auto;
@@ -76,6 +77,7 @@
             width: 100%;
             border-collapse: collapse;
             min-width: 800px;
+            table-layout: fixed;
         }
         th, td {
             border: 1px solid #ddd;
@@ -83,6 +85,9 @@
             text-align: center;
             word-break: break-word;
             min-width: 100px;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         th {
             background-color: #f2f2f2;
@@ -104,19 +109,39 @@
             font-size: 14px;
             cursor: pointer;
             transition: background-color 0.3s;
+            user-select: none;
         }
         .model-item:hover {
             background-color: #d0e5f5;
         }
-        #copyNotification {
+        .custom-alert {
             position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background-color: #4CAF50;
-            color: white;
-            padding: 15px;
-            border-radius: 5px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             display: none;
+            z-index: 1000;
+            min-width: 300px;
+            text-align: center;
+        }
+        .alert-content {
+            margin: 20px 0;
+            color: #2c3e50;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+        .alert-button {
+            margin-top: 20px;
+        }
+        .alert-button button {
+            margin: 0 auto;
+            padding: 8px 20px;
+            font-size: 14px;
+            background-color: #3498db;
         }
         .log-table {
             margin-top: 20px;
@@ -168,6 +193,7 @@
             cursor: pointer;
             border: 1px solid #ddd;
             border-radius: 3px;
+            user-select: none;
         }
         .pagination span.active {
             background-color: #3498db;
@@ -211,9 +237,16 @@
             height: 35px;
         }
         @media screen and (max-width: 768px) {
-            .container {
-                width: 100%;
+            body {
                 padding: 10px;
+                margin-top: 10px;
+            }
+            .container {
+                width: 95%;
+                max-width: calc(100% - 20px);
+                padding: 10px;
+                margin: 0px auto;
+                box-sizing: border-box;
             }
             input[type="text"] {
                 font-size: 14px;
@@ -226,6 +259,7 @@
             }
             th, td {
                 padding: 8px 4px;
+                font-size: 12px;
             }
             .tag {
                 font-size: 10px;
@@ -234,9 +268,6 @@
             .pagination span {
                 padding: 3px 6px;
                 font-size: 12px;
-            }
-            .container {
-                padding: 10px 5px;
             }
             h1 {
                 font-size: 20px;
@@ -249,7 +280,7 @@
     <script>
         // 尝试加载CDN jQuery，如果失败则加载本地jQuery
         document.write('<script src="https://code.jquery.com/jquery-3.6.0.min.js" onerror="loadLocalJQuery()"><\/script>');
-        
+
         function loadLocalJQuery() {
             document.write('<script src="js/jquery-3.6.0.min.js"><\/script>');
         }
@@ -259,9 +290,9 @@
     <div class="container">
         <h1>中转站 API 查询工具</h1>
         <h2>API地址</h2>
-        <input type="text" id="urlInput" placeholder="请输入URL" value=""> <!-- 如果需要默认地址value=""里面添加地址即可 -->
+        <input type="text" id="urlInput" placeholder="请输入URL" value="" autocomplete="off"> <!-- 如果需要默认地址value=""里面添加地址即可 -->
         <h2>API Key</h2>
-        <input type="text" id="apiKeyInput" placeholder="请输入你的API Key">
+        <input type="text" id="apiKeyInput" placeholder="请输入你的API Key" autocomplete="off">
         <button id="queryBtn">查询余额 & 日志 & 模型</button>
         <div id="result"></div>
         <div id="logList"></div>
@@ -269,17 +300,24 @@
         <div id="modelList" class="model-content"></div>
     </div>
     <div class="github-link">
-        <a href="https://github.com/GouTou-02/OneAPI-Key-Tool" target="_blank">
+        <a href="https://github.com/GouTou-02/OneAPI-Key-Tool" target="_blank" rel="noopener noreferrer">
             <img src="images/github-mark.svg" alt="GitHub">
         </a>
     </div>
-    <div id="copyNotification">已复制到剪贴板</div>
+    <div class="custom-alert" id="customAlert">
+        <div class="alert-content"></div>
+        <div class="alert-button">
+            <button onclick="closeAlert()">确定</button>
+        </div>
+    </div>
 
     <script>
         $(document).ready(function() {
             var currentPage = 1;
             var logsPerPage = 20;
             var allLogs = [];
+            var isQuerying = false;
+            var alertTimeout;
 
             // 添加折叠面板功能
             var coll = document.getElementsByClassName("collapsible");
@@ -293,6 +331,10 @@
                         content.style.maxHeight = content.scrollHeight + "px";
                     }
                 });
+            }
+
+            function sanitizeInput(input) {
+                return input.replace(/[<>]/g, '');
             }
 
             function renderLogs(page) {
@@ -321,7 +363,7 @@
 
                 pageData.forEach(function(log) {
                     var useTimeTag = '';
-                    var time = parseInt(log.use_time);
+                    var time = parseInt(log.use_time) || 0;
                     if (time < 101) {
                         useTimeTag = `<span class="tag tag-green">${time}秒</span>`;
                     } else if (time < 300) {
@@ -338,16 +380,20 @@
                         '<span class="tag tag-green">消费</span>' : 
                         '<span class="tag tag-red">错误</span>';
 
+                    var safeTokenName = sanitizeInput(log.token_name || '');
+                    var safeModelName = sanitizeInput(log.model_name || '');
+                    var safeContent = sanitizeInput(log.content || '');
+
                     logHtml += "<tr>" +
-                        "<td>" + new Date(log.created_at * 1000).toLocaleString() + "</td>" +
-                        "<td>" + log.token_name + "</td>" +
-                        "<td>" + log.model_name + "</td>" +
+                        "<td>" + new Date((log.created_at || 0) * 1000).toLocaleString() + "</td>" +
+                        "<td>" + safeTokenName + "</td>" +
+                        "<td>" + safeModelName + "</td>" +
                         "<td>" + statusTag + "</td>" +
                         "<td>" + useTimeTag + streamTag + "</td>" +
-                        "<td>" + log.prompt_tokens + "</td>" +
-                        "<td>" + log.completion_tokens + "</td>" +
-                        "<td>" + (log.quota / 1000000).toFixed(6) + "</td>" +
-                        "<td>" + log.content + "</td>" +
+                        "<td>" + (log.prompt_tokens || 0) + "</td>" +
+                        "<td>" + (log.completion_tokens || 0) + "</td>" +
+                        "<td>" + ((log.quota || 0) / 1000000).toFixed(6) + "</td>" +
+                        "<td>" + safeContent + "</td>" +
                         "</tr>";
                 });
 
@@ -369,16 +415,39 @@
             }
 
             window.changePage = function(page) {
+                if (page < 1 || page > Math.ceil(allLogs.length / logsPerPage)) return;
                 currentPage = page;
                 renderLogs(page);
             };
 
             $('#queryBtn').click(function() {
+                if (isQuerying) return;
+                isQuerying = true;
+
+                var apiKey = sanitizeInput($('#apiKeyInput').val().trim());
+                var baseUrl = sanitizeInput($('#urlInput').val().trim().replace(/\/+$/, ''));
+
+                if (!baseUrl && !apiKey) {
+                    showAlert('请输入API地址和API Key！<br><br>API地址例如: https://api.example.com<br>API Key通常以sk-开头');
+                    isQuerying = false;
+                    return;
+                }
+
+                if (!baseUrl) {
+                    showAlert('请输入API地址！<br><br>例如: https://api.example.com');
+                    isQuerying = false;
+                    return;
+                }
+
+                if (!apiKey) {
+                    showAlert('请输入API Key！<br><br>API Key通常以sk-开头');
+                    isQuerying = false;
+                    return;
+                }
+
                 document.querySelector('#queryBtn').innerText = '查询中';
                 document.querySelector('#queryBtn').disabled = true;
 
-                var apiKey = $('#apiKeyInput').val();
-                var baseUrl = $('#urlInput').val().replace(/\/+$/, '');
                 var headers = {
                     'Authorization': 'Bearer ' + apiKey,
                     'Content-Type': 'application/json'
@@ -389,35 +458,41 @@
                     $.ajax({
                         url: baseUrl + "/v1/dashboard/billing/subscription",
                         headers: headers,
-                        method: 'GET'
+                        method: 'GET',
+                        timeout: 30000
                     }),
                     $.ajax({
                         url: baseUrl + "/dashboard/billing/usage",
                         headers: headers,
-                        method: 'GET'
+                        method: 'GET',
+                        timeout: 30000
                     })
                 ).then(function(subscriptionData, balanceData) {
-                    var resultHtml = "<h2>余额查询结果</h2>" +
-                        "<div class='table-container'><table>" +
-                        "<tr>" +
-                        "<th>支付方式是否存在</th>" +
-                        "<th>软额度(美元)</th>" +
-                        "<th>硬额度(美元)</th>" +
-                        "<th>系统硬额度(美元)</th>" +
-                        "<th>访问权限截止时间</th>" +
-                        "<th>总使用量(美元)</th>" +
-                        "</tr>" +
-                        "<tr>" +
-                        "<td>" + (subscriptionData[0].has_payment_method ? "是" : "否") + "</td>" +
-                        "<td>" + subscriptionData[0].soft_limit_usd + "</td>" +
-                        "<td>" + subscriptionData[0].hard_limit_usd + "</td>" +
-                        "<td>" + subscriptionData[0].system_hard_limit_usd + "</td>" +
-                        "<td>" + (subscriptionData[0].access_until ? new Date(subscriptionData[0].access_until * 1000).toLocaleString() : "无限制") + "</td>" +
-                        "<td>" + (balanceData[0].total_usage / 100).toFixed(2) + "</td>" +
-                        "</tr>" +
-                        "</table></div>";
-                    
-                    $('#result').html(resultHtml);
+                    try {
+                        var resultHtml = "<h2>余额查询结果</h2>" +
+                            "<div class='table-container'><table>" +
+                            "<tr>" +
+                            "<th>支付方式是否存在</th>" +
+                            "<th>软额度(美元)</th>" +
+                            "<th>硬额度(美元)</th>" +
+                            "<th>系统硬额度(美元)</th>" +
+                            "<th>访问权限截止时间</th>" +
+                            "<th>总使用量(美元)</th>" +
+                            "</tr>" +
+                            "<tr>" +
+                            "<td>" + (subscriptionData[0].has_payment_method ? "是" : "否") + "</td>" +
+                            "<td>" + (subscriptionData[0].soft_limit_usd || 0) + "</td>" +
+                            "<td>" + (subscriptionData[0].hard_limit_usd || 0) + "</td>" +
+                            "<td>" + (subscriptionData[0].system_hard_limit_usd || 0) + "</td>" +
+                            "<td>" + (subscriptionData[0].access_until ? new Date(subscriptionData[0].access_until * 1000).toLocaleString() : "无限制") + "</td>" +
+                            "<td>" + ((balanceData[0].total_usage || 0) / 100).toFixed(2) + "</td>" +
+                            "</tr>" +
+                            "</table></div>";
+                        
+                        $('#result').html(resultHtml);
+                    } catch (e) {
+                        $('#result').html("<p style='color: red;'>处理余额数据时出错：" + e.message + "</p>");
+                    }
                 }).fail(function(error) {
                     var errorMessage = "余额查询出错：";
                     if(error.status === 401) {
@@ -441,82 +516,90 @@
                     url: baseUrl + "/v1/models",
                     headers: headers,
                     method: 'GET',
+                    timeout: 30000,
                     success: function(response) {
-                        var modelCategories = {
-                            'OpenAI': [],
-                            'Claude': [],
-                            'Google': [],
-                            'Yi': [],
-                            'Qwen': [],
-                            'GLM': [],
-                            'BAAI': [],
-                            'DeepSeek': [],
-                            'InternLM': [],
-                            'Moonshot': [],
-                            'Llama': [],
-                            'Mistral': [],
-                            'Google': [],
-                            'Other': []
-                        };
+                        try {
+                            var modelCategories = {
+                                'OpenAI': [],
+                                'Claude': [],
+                                'Google': [],
+                                'Yi': [],
+                                'Qwen': [],
+                                'GLM': [],
+                                'BAAI': [],
+                                'DeepSeek': [],
+                                'InternLM': [],
+                                'Moonshot': [],
+                                'Llama': [],
+                                'Mistral': [],
+                                'Google': [],
+                                'Other': []
+                            };
 
-                        // 只显示当前key有权限访问的模型
-                        response.data.forEach(function(model) {
-                            if(model.permission) {
-                                var id = model.id.toLowerCase();
-                                if (id.includes('gpt')) {
-                                    modelCategories['OpenAI'].push(model.id);
-                                } else if (id.includes('claude')) {
-                                    modelCategories['Claude'].push(model.id);
-                                } else if (id.includes('gemma') || id.includes('google')) {
-                                    modelCategories['Google'].push(model.id);
-                                } else if (id.includes('yi-')) {
-                                    modelCategories['Yi'].push(model.id);
-                                } else if (id.includes('qwen')) {
-                                    modelCategories['Qwen'].push(model.id);
-                                } else if (id.includes('glm')) {
-                                    modelCategories['GLM'].push(model.id);
-                                } else if (id.includes('baai')) {
-                                    modelCategories['BAAI'].push(model.id);
-                                } else if (id.includes('deepseek')) {
-                                    modelCategories['DeepSeek'].push(model.id);
-                                } else if (id.includes('internlm')) {
-                                    modelCategories['InternLM'].push(model.id);
-                                } else if (id.includes('moonshot')) {
-                                    modelCategories['Moonshot'].push(model.id);
-                                } else if (id.includes('llama')) {
-                                    modelCategories['Llama'].push(model.id);
-                                } else if (id.includes('mistral')) {
-                                    modelCategories['Mistral'].push(model.id);
-                                } else if (id.includes('gemini')) {
-                                    modelCategories['Google'].push(model.id);
-                                } else {
-                                    modelCategories['Other'].push(model.id);
+                            // 只显示当前key有权限访问的模型
+                            response.data.forEach(function(model) {
+                                if(model.permission) {
+                                    var id = (model.id || '').toLowerCase();
+                                    var safeId = sanitizeInput(model.id || '');
+                                    if (id.includes('gpt')) {
+                                        modelCategories['OpenAI'].push(safeId);
+                                    } else if (id.includes('claude')) {
+                                        modelCategories['Claude'].push(safeId);
+                                    } else if (id.includes('gemma') || id.includes('google')) {
+                                        modelCategories['Google'].push(safeId);
+                                    } else if (id.includes('yi-')) {
+                                        modelCategories['Yi'].push(safeId);
+                                    } else if (id.includes('qwen')) {
+                                        modelCategories['Qwen'].push(safeId);
+                                    } else if (id.includes('glm')) {
+                                        modelCategories['GLM'].push(safeId);
+                                    } else if (id.includes('baai')) {
+                                        modelCategories['BAAI'].push(safeId);
+                                    } else if (id.includes('deepseek')) {
+                                        modelCategories['DeepSeek'].push(safeId);
+                                    } else if (id.includes('internlm')) {
+                                        modelCategories['InternLM'].push(safeId);
+                                    } else if (id.includes('moonshot')) {
+                                        modelCategories['Moonshot'].push(safeId);
+                                    } else if (id.includes('llama')) {
+                                        modelCategories['Llama'].push(safeId);
+                                    } else if (id.includes('mistral')) {
+                                        modelCategories['Mistral'].push(safeId);
+                                    } else if (id.includes('gemini')) {
+                                        modelCategories['Google'].push(safeId);
+                                    } else {
+                                        modelCategories['Other'].push(safeId);
+                                    }
+                                }
+                            });
+
+                            var modelListHtml = "";
+                            for (var category in modelCategories) {
+                                if (modelCategories[category].length > 0) {
+                                    modelListHtml += "<div class='model-category'><h3>" + category + "</h3><div class='model-list'>";
+                                    modelCategories[category].forEach(function(model) {
+                                        modelListHtml += "<span class='model-item' data-model='" + model + "'>" + model + "</span>";
+                                    });
+                                    modelListHtml += "</div></div>";
                                 }
                             }
-                        });
+                            $('#modelList').html(modelListHtml);
+                            
+                            // 显示折叠按钮
+                            $('.collapsible').css('display', 'flex');
 
-                        var modelListHtml = "";
-                        for (var category in modelCategories) {
-                            if (modelCategories[category].length > 0) {
-                                modelListHtml += "<div class='model-category'><h3>" + category + "</h3><div class='model-list'>";
-                                modelCategories[category].forEach(function(model) {
-                                    modelListHtml += "<span class='model-item' data-model='" + model + "'>" + model + "</span>";
+                            // 为模型名称添加点击事件
+                            $('.model-item').click(function() {
+                                var modelName = $(this).data('model');
+                                navigator.clipboard.writeText(modelName).then(function() {
+                                    showAlert('模型名称已复制到剪贴板！<br><br>您可以在其他应用中使用此模型名称');
+                                }).catch(function(err) {
+                                    console.error('复制失败:', err);
                                 });
-                                modelListHtml += "</div></div>";
-                            }
-                        }
-                        $('#modelList').html(modelListHtml);
-                        
-                        // 显示折叠按钮
-                        $('.collapsible').css('display', 'flex');
-
-                        // 为模型名称添加点击事件
-                        $('.model-item').click(function() {
-                            var modelName = $(this).data('model');
-                            navigator.clipboard.writeText(modelName).then(function() {
-                                showNotification();
                             });
-                        });
+                        } catch (e) {
+                            $('#modelList').html("<p style='color: red;'>处理模型数据时出错：" + e.message + "</p>");
+                        }
                     },
                     error: function(error) {
                         var errorMessage = "模型列表查询出错：";
@@ -543,14 +626,19 @@
                     headers: headers,
                     method: 'GET',
                     data: { key: apiKey },
+                    timeout: 30000,
                     success: function(response) {
-                        if (response.success) {
-                            allLogs = response.data.reverse();
-                            currentPage = 1;
-                            renderLogs(currentPage);
-                        } else {
-                            allLogs = [];
-                            $('#logList').html("<p style='color: red;'>日志查询失败：" + response.message + "</p>");
+                        try {
+                            if (response.success) {
+                                allLogs = (response.data || []).reverse();
+                                currentPage = 1;
+                                renderLogs(currentPage);
+                            } else {
+                                allLogs = [];
+                                $('#logList').html("<p style='color: red;'>日志查询失败：" + (response.message || '未知错误') + "</p>");
+                            }
+                        } catch (e) {
+                            $('#logList').html("<p style='color: red;'>处理日志数据时出错：" + e.message + "</p>");
                         }
                     },
                     error: function(error) {
@@ -574,12 +662,31 @@
                 }).always(function() {
                     document.querySelector('#queryBtn').innerText = '查询余额 & 日志 & 模型';
                     document.querySelector('#queryBtn').disabled = false;
+                    isQuerying = false;
                 });
             });
 
-            function showNotification() {
-                $('#copyNotification').fadeIn().delay(2000).fadeOut();
+            function showAlert(message) {
+                clearTimeout(alertTimeout);
+                var $alert = $('#customAlert');
+                $alert.find('.alert-content').html(message);
+                $alert.fadeIn();
+                
+                // 3秒后自动关闭
+                alertTimeout = setTimeout(function() {
+                    closeAlert();
+                }, 3000);
             }
+
+            window.closeAlert = function() {
+                clearTimeout(alertTimeout);
+                $('#customAlert').fadeOut();
+            };
+
+            // 防止XSS攻击
+            $(document).on('input', 'input[type="text"]', function() {
+                $(this).val(sanitizeInput($(this).val()));
+            });
         });
     </script>
 </body>
