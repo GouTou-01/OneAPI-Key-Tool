@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中转站 API 查询工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 100%;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+            display: block;
+            min-height: 100vh;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1), 
+                        0 4px 8px rgba(0,0,0,0.06),
+                        0 2px 4px rgba(0,0,0,0.04);
+            width: 95%;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1, h2 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            display: block;
+            padding: 10px 20px;
+            margin: 20px auto;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.2s ease;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        button:disabled {
+            background-color: gray;
+        }
+        .table-container {
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 800px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: center;
+            word-break: break-word;
+            min-width: 100px;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        .model-category {
+            margin-top: 20px;
+        }
+        .model-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .model-item {
+            background-color: #e7f2fa;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .model-item:hover {
+            background-color: #d0e5f5;
+        }
+        #copyNotification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #4CAF50;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+        .log-table {
+            margin-top: 20px;
+        }
+        .log-table th {
+            background-color: #f8f9fa;
+        }
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin: 0 4px;
+            white-space: nowrap;
+        }
+        .tag-blue {
+            background-color: #e6f7ff;
+            color: #1890ff;
+            border: 1px solid #91d5ff;
+        }
+        .tag-purple {
+            background-color: #f9f0ff;
+            color: #722ed1;
+            border: 1px solid #d3adf7;
+        }
+        .tag-green {
+            background-color: #f6ffed;
+            color: #52c41a;
+            border: 1px solid #b7eb8f;
+        }
+        .tag-orange {
+            background-color: #fff7e6;
+            color: #fa8c16;
+            border: 1px solid #ffd591;
+        }
+        .tag-red {
+            background-color: #fff1f0;
+            color: #f5222d;
+            border: 1px solid #ffa39e;
+        }
+        .pagination {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .pagination span {
+            display: inline-block;
+            padding: 5px 10px;
+            margin: 0 5px;
+            cursor: pointer;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        .pagination span.active {
+            background-color: #3498db;
+            color: white;
+            border-color: #3498db;
+        }
+        .collapsible {
+            background-color: #f8f9fa;
+            color: #2c3e50;
+            cursor: pointer;
+            padding: 18px;
+            width: 100%;
+            border: none;
+            text-align: left;
+            outline: none;
+            font-size: 15px;
+            margin-top: 20px;
+            border-radius: 4px;
+            display: none;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .collapsible:after {
+            content: '\002B';
+            font-weight: bold;
+            float: right;
+            margin-left: 5px;
+        }
+        .model-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.2s ease-out;
+            background-color: white;
+        }
+        .github-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .github-link img {
+            width: 35px;
+            height: 35px;
+        }
+        @media screen and (max-width: 768px) {
+            .container {
+                width: 100%;
+                padding: 10px;
+            }
+            input[type="text"] {
+                font-size: 14px;
+            }
+            button {
+                width: 100%;
+            }
+            .model-item {
+                font-size: 12px;
+            }
+            th, td {
+                padding: 8px 4px;
+            }
+            .tag {
+                font-size: 10px;
+                padding: 1px 4px;
+            }
+            .pagination span {
+                padding: 3px 6px;
+                font-size: 12px;
+            }
+            .container {
+                padding: 10px 5px;
+            }
+            h1 {
+                font-size: 20px;
+            }
+            h2 {
+                font-size: 18px;
+            }
+        }
+    </style>
+    <script>
+        // 尝试加载CDN jQuery，如果失败则加载本地jQuery
+        document.write('<script src="https://code.jquery.com/jquery-3.6.0.min.js" onerror="loadLocalJQuery()"><\/script>');
+        
+        function loadLocalJQuery() {
+            document.write('<script src="js/jquery-3.6.0.min.js"><\/script>');
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>中转站 API 查询工具</h1>
+        <input type="text" id="urlInput" placeholder="请输入URL">
+        <input type="text" id="apiKeyInput" placeholder="请输入你的API Key">
+        <button id="queryBtn">查询余额 & 日志 & 模型</button>
+        <div id="result"></div>
+        <div id="logList"></div>
+        <button class="collapsible">点击查看支持的模型列表</button>
+        <div id="modelList" class="model-content"></div>
+    </div>
+    <div class="github-link">
+        <a href="https://github.com/GouTou-02/OneAPI-Key-Tool" target="_blank">
+            <img src="images/github-mark.svg" alt="GitHub">
+        </a>
+    </div>
+    <div id="copyNotification">已复制到剪贴板</div>
+
+    <script>
+        $(document).ready(function() {
+            var currentPage = 1;
+            var logsPerPage = 20;
+            var allLogs = [];
+
+            // 添加折叠面板功能
+            var coll = document.getElementsByClassName("collapsible");
+            for (var i = 0; i < coll.length; i++) {
+                coll[i].addEventListener("click", function() {
+                    this.classList.toggle("active");
+                    var content = this.nextElementSibling;
+                    if (content.style.maxHeight) {
+                        content.style.maxHeight = null;
+                    } else {
+                        content.style.maxHeight = content.scrollHeight + "px";
+                    }
+                });
+            }
+
+            function renderLogs(page) {
+                if (allLogs.length === 0) {
+                    $('#logList').html("");
+                    return;
+                }
+                
+                var start = (page - 1) * logsPerPage;
+                var end = start + logsPerPage;
+                var pageData = allLogs.slice(start, end);
+                
+                var logHtml = "<h2>日志信息</h2>" +
+                    "<div class='table-container'><table>" +
+                    "<tr>" +
+                    "<th>时间</th>" +
+                    "<th>令牌名</th>" +
+                    "<th>模型</th>" +
+                    "<th>类型</th>" +
+                    "<th>用时</th>" +
+                    "<th>提示词tokens</th>" +
+                    "<th>补全tokens</th>" +
+                    "<th>花费</th>" +
+                    "<th>详情</th>" +
+                    "</tr>";
+
+                pageData.forEach(function(log) {
+                    var useTimeTag = '';
+                    var time = parseInt(log.use_time);
+                    if (time < 101) {
+                        useTimeTag = `<span class="tag tag-green">${time}秒</span>`;
+                    } else if (time < 300) {
+                        useTimeTag = `<span class="tag tag-orange">${time}秒</span>`;
+                    } else {
+                        useTimeTag = `<span class="tag tag-red">${time}秒</span>`;
+                    }
+
+                    var streamTag = log.is_stream ? 
+                        '<span class="tag tag-blue">流</span>' : 
+                        '<span class="tag tag-purple">非流</span>';
+                        
+                    var statusTag = log.quota > 0 ? 
+                        '<span class="tag tag-green">消费</span>' : 
+                        '<span class="tag tag-red">错误</span>';
+
+                    logHtml += "<tr>" +
+                        "<td>" + new Date(log.created_at * 1000).toLocaleString() + "</td>" +
+                        "<td>" + log.token_name + "</td>" +
+                        "<td>" + log.model_name + "</td>" +
+                        "<td>" + statusTag + "</td>" +
+                        "<td>" + useTimeTag + streamTag + "</td>" +
+                        "<td>" + log.prompt_tokens + "</td>" +
+                        "<td>" + log.completion_tokens + "</td>" +
+                        "<td>" + (log.quota / 1000000).toFixed(6) + "</td>" +
+                        "<td>" + log.content + "</td>" +
+                        "</tr>";
+                });
+
+                logHtml += "</table></div>";
+
+                // 添加分页信息
+                var totalPages = Math.ceil(allLogs.length / logsPerPage);
+                logHtml += "<div class='pagination'>";
+                logHtml += `<div>显示第 ${start + 1} 条-第 ${Math.min(end, allLogs.length)} 条&#8195; &emsp;共 ${allLogs.length} 条</div>`;
+                logHtml += `<br>`;
+                if (totalPages > 1) {
+                    for (var i = 1; i <= totalPages; i++) {
+                        logHtml += `<span class="${i === page ? 'active' : ''}" onclick="changePage(${i})">${i}</span>`;
+                    }
+                }
+                logHtml += "</div>";
+
+                $('#logList').html(logHtml);
+            }
+
+            window.changePage = function(page) {
+                currentPage = page;
+                renderLogs(page);
+            };
+
+            $('#queryBtn').click(function() {
+                document.querySelector('#queryBtn').innerText = '查询中';
+                document.querySelector('#queryBtn').disabled = true;
+
+                var apiKey = $('#apiKeyInput').val();
+                var baseUrl = $('#urlInput').val().replace(/\/+$/, '');
+                var headers = {
+                    'Authorization': 'Bearer ' + apiKey,
+                    'Content-Type': 'application/json'
+                };
+
+                // 查询余额
+                $.when(
+                    $.ajax({
+                        url: baseUrl + "/v1/dashboard/billing/subscription",
+                        headers: headers,
+                        method: 'GET'
+                    }),
+                    $.ajax({
+                        url: baseUrl + "/dashboard/billing/usage",
+                        headers: headers,
+                        method: 'GET'
+                    })
+                ).then(function(subscriptionData, balanceData) {
+                    var resultHtml = "<h2>余额查询结果</h2>" +
+                        "<div class='table-container'><table>" +
+                        "<tr>" +
+                        "<th>支付方式是否存在</th>" +
+                        "<th>软额度(美元)</th>" +
+                        "<th>硬额度(美元)</th>" +
+                        "<th>系统硬额度(美元)</th>" +
+                        "<th>访问权限截止时间</th>" +
+                        "<th>总使用量(美元)</th>" +
+                        "</tr>" +
+                        "<tr>" +
+                        "<td>" + (subscriptionData[0].has_payment_method ? "是" : "否") + "</td>" +
+                        "<td>" + subscriptionData[0].soft_limit_usd + "</td>" +
+                        "<td>" + subscriptionData[0].hard_limit_usd + "</td>" +
+                        "<td>" + subscriptionData[0].system_hard_limit_usd + "</td>" +
+                        "<td>" + (subscriptionData[0].access_until ? new Date(subscriptionData[0].access_until * 1000).toLocaleString() : "无限制") + "</td>" +
+                        "<td>" + (balanceData[0].total_usage / 100).toFixed(2) + "</td>" +
+                        "</tr>" +
+                        "</table></div>";
+                    
+                    $('#result').html(resultHtml);
+                }).fail(function(error) {
+                    var errorMessage = "余额查询出错：";
+                    if(error.status === 401) {
+                        errorMessage += "API Key无效或已过期，请检查您的API Key是否正确";
+                    } else if(error.status === 404) {
+                        errorMessage += "API地址错误，请检查您输入的URL是否正确";
+                    } else if(error.status === 0) {
+                        errorMessage += "无法连接到服务器，请检查网络连接或URL是否正确";
+                    } else if(error.status === 403) {
+                        errorMessage += "没有访问权限，请确认您的API Key权限是否正确";
+                    } else if(error.status === 500) {
+                        errorMessage += "服务器内部错误，请稍后重试";
+                    } else {
+                        errorMessage += error.statusText || "未知错误，请检查API地址和Key是否正确";
+                    }
+                    $('#result').html("<p style='color: red;'>" + errorMessage + "</p>");
+                });
+
+                // 查询模型列表
+                $.ajax({
+                    url: baseUrl + "/v1/models",
+                    headers: headers,
+                    method: 'GET',
+                    success: function(response) {
+                        var modelCategories = {
+                            'OpenAI': [],
+                            'Claude': [],
+                            'Google': [],
+                            'Yi': [],
+                            'Qwen': [],
+                            'GLM': [],
+                            'BAAI': [],
+                            'DeepSeek': [],
+                            'InternLM': [],
+                            'Moonshot': [],
+                            'Llama': [],
+                            'Mistral': [],
+                            'Google': [],
+                            'Other': []
+                        };
+
+                        // 只显示当前key有权限访问的模型
+                        response.data.forEach(function(model) {
+                            if(model.permission) {
+                                var id = model.id.toLowerCase();
+                                if (id.includes('gpt')) {
+                                    modelCategories['OpenAI'].push(model.id);
+                                } else if (id.includes('claude')) {
+                                    modelCategories['Claude'].push(model.id);
+                                } else if (id.includes('gemma') || id.includes('google')) {
+                                    modelCategories['Google'].push(model.id);
+                                } else if (id.includes('yi-')) {
+                                    modelCategories['Yi'].push(model.id);
+                                } else if (id.includes('qwen')) {
+                                    modelCategories['Qwen'].push(model.id);
+                                } else if (id.includes('glm')) {
+                                    modelCategories['GLM'].push(model.id);
+                                } else if (id.includes('baai')) {
+                                    modelCategories['BAAI'].push(model.id);
+                                } else if (id.includes('deepseek')) {
+                                    modelCategories['DeepSeek'].push(model.id);
+                                } else if (id.includes('internlm')) {
+                                    modelCategories['InternLM'].push(model.id);
+                                } else if (id.includes('moonshot')) {
+                                    modelCategories['Moonshot'].push(model.id);
+                                } else if (id.includes('llama')) {
+                                    modelCategories['Llama'].push(model.id);
+                                } else if (id.includes('mistral')) {
+                                    modelCategories['Mistral'].push(model.id);
+                                } else if (id.includes('gemini')) {
+                                    modelCategories['Google'].push(model.id);
+                                } else {
+                                    modelCategories['Other'].push(model.id);
+                                }
+                            }
+                        });
+
+                        var modelListHtml = "";
+                        for (var category in modelCategories) {
+                            if (modelCategories[category].length > 0) {
+                                modelListHtml += "<div class='model-category'><h3>" + category + "</h3><div class='model-list'>";
+                                modelCategories[category].forEach(function(model) {
+                                    modelListHtml += "<span class='model-item' data-model='" + model + "'>" + model + "</span>";
+                                });
+                                modelListHtml += "</div></div>";
+                            }
+                        }
+                        $('#modelList').html(modelListHtml);
+                        
+                        // 显示折叠按钮
+                        $('.collapsible').css('display', 'flex');
+
+                        // 为模型名称添加点击事件
+                        $('.model-item').click(function() {
+                            var modelName = $(this).data('model');
+                            navigator.clipboard.writeText(modelName).then(function() {
+                                showNotification();
+                            });
+                        });
+                    },
+                    error: function(error) {
+                        var errorMessage = "模型列表查询出错：";
+                        if(error.status === 401) {
+                            errorMessage += "API Key无效或已过期";
+                        } else if(error.status === 404) {
+                            errorMessage += "API地址错误，请检查URL";
+                        } else if(error.status === 0) {
+                            errorMessage += "无法连接到服务器，请检查网络或URL";
+                        } else if(error.status === 403) {
+                            errorMessage += "没有访问权限";
+                        } else if(error.status === 500) {
+                            errorMessage += "服务器内部错误";
+                        } else {
+                            errorMessage += error.statusText || "未知错误";
+                        }
+                        $('#modelList').html("<p style='color: red;'>" + errorMessage + "</p>");
+                    }
+                });
+
+                // 查询日志
+                $.ajax({
+                    url: baseUrl + "/api/log/token",
+                    headers: headers,
+                    method: 'GET',
+                    data: { key: apiKey },
+                    success: function(response) {
+                        if (response.success) {
+                            allLogs = response.data.reverse();
+                            currentPage = 1;
+                            renderLogs(currentPage);
+                        } else {
+                            allLogs = [];
+                            $('#logList').html("<p style='color: red;'>日志查询失败：" + response.message + "</p>");
+                        }
+                    },
+                    error: function(error) {
+                        var errorMessage = "日志查询出错：";
+                        if(error.status === 401) {
+                            errorMessage += "API Key无效或已过期";
+                        } else if(error.status === 404) {
+                            errorMessage += "API地址错误，请检查URL";
+                        } else if(error.status === 0) {
+                            errorMessage += "无法连接到服务器，请检查网络或URL";
+                        } else if(error.status === 403) {
+                            errorMessage += "没有访问权限";
+                        } else if(error.status === 500) {
+                            errorMessage += "服务器内部错误";
+                        } else {
+                            errorMessage += error.statusText || "未知错误";
+                        }
+                        allLogs = [];
+                        $('#logList').html("<p style='color: red;'>" + errorMessage + "</p>");
+                    }
+                }).always(function() {
+                    document.querySelector('#queryBtn').innerText = '查询余额 & 日志 & 模型';
+                    document.querySelector('#queryBtn').disabled = false;
+                });
+            });
+
+            function showNotification() {
+                $('#copyNotification').fadeIn().delay(2000).fadeOut();
+            }
+        });
+    </script>
+</body>
+</html>
