@@ -29,9 +29,15 @@
             max-width: 1200px;
             margin: 0 auto;
         }
-        h1, h2 {
+        h1 {
             color: #2c3e50;
             text-align: center;
+        }
+        h2 {
+            color: #2c3e50;
+            text-align: left;
+            font-size: 16px;
+            margin-bottom: 5px;
         }
         input[type="text"] {
             width: 100%;
@@ -236,7 +242,7 @@
                 font-size: 20px;
             }
             h2 {
-                font-size: 18px;
+                font-size: 14px;
             }
         }
     </style>
@@ -252,7 +258,9 @@
 <body>
     <div class="container">
         <h1>中转站 API 查询工具</h1>
-        <input type="text" id="urlInput" placeholder="请输入URL">
+        <h2>API地址</h2>
+        <input type="text" id="urlInput" placeholder="请输入URL" value=""> <!-- 如果需要默认地址value=""里面添加地址即可 -->
+        <h2>API Key</h2>
         <input type="text" id="apiKeyInput" placeholder="请输入你的API Key">
         <button id="queryBtn">查询余额 & 日志 & 模型</button>
         <div id="result"></div>
