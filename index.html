@@ -110,6 +110,10 @@
             cursor: pointer;
             transition: background-color 0.3s;
             user-select: none;
+            max-width: none; /* 移除最大宽度限制 */
+            white-space: normal; /* 允许文本换行 */
+            word-wrap: break-word; /* 长单词换行 */
+            line-height: 1.4; /* 增加行高 */
         }
         .model-item:hover {
             background-color: #d0e5f5;
@@ -181,6 +185,11 @@
             background-color: #fff1f0;
             color: #f5222d;
             border: 1px solid #ffa39e;
+        }
+        .tag.model {
+            max-width: none; /* 移除最大宽度限制 */
+            white-space: normal; /* 允许文本换行 */
+            word-wrap: break-word; /* 长单词换行 */
         }
         .pagination {
             text-align: center;
@@ -300,7 +309,7 @@
         <div id="modelList" class="model-content"></div>
     </div>
     <div class="github-link">
-        <a href="https://github.com/GouTou-02/OneAPI-Key-Tool" target="_blank" rel="noopener noreferrer">
+        <a href="https://github.com/GouTou-01/OneAPI-Key-Tool" target="_blank" rel="noopener noreferrer">
             <img src="images/github-mark.svg" alt="GitHub">
         </a>
     </div>
@@ -318,6 +327,8 @@
             var allLogs = [];
             var isQuerying = false;
             var alertTimeout;
+            var lastApiKey = '';
+            var lastBaseUrl = '';
 
             // 添加折叠面板功能
             var coll = document.getElementsByClassName("collapsible");
@@ -335,6 +346,15 @@
 
             function sanitizeInput(input) {
                 return input.replace(/[<>]/g, '');
+            }
+
+            function clearAllData() {
+                $('#result').empty();
+                $('#logList').empty();
+                $('#modelList').empty();
+                $('.collapsible').hide();
+                allLogs = [];
+                currentPage = 1;
             }
 
             function renderLogs(page) {
@@ -363,7 +383,7 @@
 
                 pageData.forEach(function(log) {
                     var useTimeTag = '';
-                    var time = parseInt(log.use_time) || 0;
+                    var time = parseInt(log.use_time);
                     if (time < 101) {
                         useTimeTag = `<span class="tag tag-green">${time}秒</span>`;
                     } else if (time < 300) {
@@ -380,20 +400,16 @@
                         '<span class="tag tag-green">消费</span>' : 
                         '<span class="tag tag-red">错误</span>';
 
-                    var safeTokenName = sanitizeInput(log.token_name || '');
-                    var safeModelName = sanitizeInput(log.model_name || '');
-                    var safeContent = sanitizeInput(log.content || '');
-
                     logHtml += "<tr>" +
-                        "<td>" + new Date((log.created_at || 0) * 1000).toLocaleString() + "</td>" +
-                        "<td>" + safeTokenName + "</td>" +
-                        "<td>" + safeModelName + "</td>" +
+                        "<td>" + new Date(log.created_at * 1000).toLocaleString() + "</td>" +
+                        "<td>" + log.token_name + "</td>" +
+                        "<td><span class='tag model'>" + log.model_name + "</span></td>" +
                         "<td>" + statusTag + "</td>" +
                         "<td>" + useTimeTag + streamTag + "</td>" +
-                        "<td>" + (log.prompt_tokens || 0) + "</td>" +
-                        "<td>" + (log.completion_tokens || 0) + "</td>" +
-                        "<td>" + ((log.quota || 0) / 1000000).toFixed(6) + "</td>" +
-                        "<td>" + safeContent + "</td>" +
+                        "<td>" + (log.prompt_tokens || '-') + "</td>" +
+                        "<td>" + (log.completion_tokens || '-') + "</td>" +
+                        "<td>" + ((log.quota / 500000).toFixed(5)) + "</td>" +
+                        "<td>" + log.content + "</td>" +
                         "</tr>";
                 });
 
@@ -427,6 +443,13 @@
                 var apiKey = sanitizeInput($('#apiKeyInput').val().trim());
                 var baseUrl = sanitizeInput($('#urlInput').val().trim().replace(/\/+$/, ''));
 
+                // 如果API Key或URL发生变化，清除之前的数据
+                if (apiKey !== lastApiKey || baseUrl !== lastBaseUrl) {
+                    clearAllData();
+                    lastApiKey = apiKey;
+                    lastBaseUrl = baseUrl;
+                }
+
                 if (!baseUrl && !apiKey) {
                     showAlert('请输入API地址和API Key！<br><br>API地址例如: https://api.example.com<br>API Key通常以sk-开头');
                     isQuerying = false;
@@ -453,173 +476,6 @@
                     'Content-Type': 'application/json'
                 };
 
-                // 查询余额
-                $.when(
-                    $.ajax({
-                        url: baseUrl + "/v1/dashboard/billing/subscription",
-                        headers: headers,
-                        method: 'GET',
-                        timeout: 30000
-                    }),
-                    $.ajax({
-                        url: baseUrl + "/dashboard/billing/usage",
-                        headers: headers,
-                        method: 'GET',
-                        timeout: 30000
-                    })
-                ).then(function(subscriptionData, balanceData) {
-                    try {
-                        var resultHtml = "<h2>余额查询结果</h2>" +
-                            "<div class='table-container'><table>" +
-                            "<tr>" +
-                            "<th>支付方式是否存在</th>" +
-                            "<th>软额度(美元)</th>" +
-                            "<th>硬额度(美元)</th>" +
-                            "<th>系统硬额度(美元)</th>" +
-                            "<th>访问权限截止时间</th>" +
-                            "<th>总使用量(美元)</th>" +
-                            "</tr>" +
-                            "<tr>" +
-                            "<td>" + (subscriptionData[0].has_payment_method ? "是" : "否") + "</td>" +
-                            "<td>" + (subscriptionData[0].soft_limit_usd || 0) + "</td>" +
-                            "<td>" + (subscriptionData[0].hard_limit_usd || 0) + "</td>" +
-                            "<td>" + (subscriptionData[0].system_hard_limit_usd || 0) + "</td>" +
-                            "<td>" + (subscriptionData[0].access_until ? new Date(subscriptionData[0].access_until * 1000).toLocaleString() : "无限制") + "</td>" +
-                            "<td>" + ((balanceData[0].total_usage || 0) / 100).toFixed(2) + "</td>" +
-                            "</tr>" +
-                            "</table></div>";
-                        
-                        $('#result').html(resultHtml);
-                    } catch (e) {
-                        $('#result').html("<p style='color: red;'>处理余额数据时出错：" + e.message + "</p>");
-                    }
-                }).fail(function(error) {
-                    var errorMessage = "余额查询出错：";
-                    if(error.status === 401) {
-                        errorMessage += "API Key无效或已过期，请检查您的API Key是否正确";
-                    } else if(error.status === 404) {
-                        errorMessage += "API地址错误，请检查您输入的URL是否正确";
-                    } else if(error.status === 0) {
-                        errorMessage += "无法连接到服务器，请检查网络连接或URL是否正确";
-                    } else if(error.status === 403) {
-                        errorMessage += "没有访问权限，请确认您的API Key权限是否正确";
-                    } else if(error.status === 500) {
-                        errorMessage += "服务器内部错误，请稍后重试";
-                    } else {
-                        errorMessage += error.statusText || "未知错误，请检查API地址和Key是否正确";
-                    }
-                    $('#result').html("<p style='color: red;'>" + errorMessage + "</p>");
-                });
-
-                // 查询模型列表
-                $.ajax({
-                    url: baseUrl + "/v1/models",
-                    headers: headers,
-                    method: 'GET',
-                    timeout: 30000,
-                    success: function(response) {
-                        try {
-                            var modelCategories = {
-                                'OpenAI': [],
-                                'Claude': [],
-                                'Google': [],
-                                'Yi': [],
-                                'Qwen': [],
-                                'GLM': [],
-                                'BAAI': [],
-                                'DeepSeek': [],
-                                'InternLM': [],
-                                'Moonshot': [],
-                                'Llama': [],
-                                'Mistral': [],
-                                'Google': [],
-                                'Other': []
-                            };
-
-                            // 只显示当前key有权限访问的模型
-                            response.data.forEach(function(model) {
-                                if(model.permission) {
-                                    var id = (model.id || '').toLowerCase();
-                                    var safeId = sanitizeInput(model.id || '');
-                                    if (id.includes('gpt')) {
-                                        modelCategories['OpenAI'].push(safeId);
-                                    } else if (id.includes('claude')) {
-                                        modelCategories['Claude'].push(safeId);
-                                    } else if (id.includes('gemma') || id.includes('google')) {
-                                        modelCategories['Google'].push(safeId);
-                                    } else if (id.includes('yi-')) {
-                                        modelCategories['Yi'].push(safeId);
-                                    } else if (id.includes('qwen')) {
-                                        modelCategories['Qwen'].push(safeId);
-                                    } else if (id.includes('glm')) {
-                                        modelCategories['GLM'].push(safeId);
-                                    } else if (id.includes('baai')) {
-                                        modelCategories['BAAI'].push(safeId);
-                                    } else if (id.includes('deepseek')) {
-                                        modelCategories['DeepSeek'].push(safeId);
-                                    } else if (id.includes('internlm')) {
-                                        modelCategories['InternLM'].push(safeId);
-                                    } else if (id.includes('moonshot')) {
-                                        modelCategories['Moonshot'].push(safeId);
-                                    } else if (id.includes('llama')) {
-                                        modelCategories['Llama'].push(safeId);
-                                    } else if (id.includes('mistral')) {
-                                        modelCategories['Mistral'].push(safeId);
-                                    } else if (id.includes('gemini')) {
-                                        modelCategories['Google'].push(safeId);
-                                    } else {
-                                        modelCategories['Other'].push(safeId);
-                                    }
-                                }
-                            });
-
-                            var modelListHtml = "";
-                            for (var category in modelCategories) {
-                                if (modelCategories[category].length > 0) {
-                                    modelListHtml += "<div class='model-category'><h3>" + category + "</h3><div class='model-list'>";
-                                    modelCategories[category].forEach(function(model) {
-                                        modelListHtml += "<span class='model-item' data-model='" + model + "'>" + model + "</span>";
-                                    });
-                                    modelListHtml += "</div></div>";
-                                }
-                            }
-                            $('#modelList').html(modelListHtml);
-                            
-                            // 显示折叠按钮
-                            $('.collapsible').css('display', 'flex');
-
-                            // 为模型名称添加点击事件
-                            $('.model-item').click(function() {
-                                var modelName = $(this).data('model');
-                                navigator.clipboard.writeText(modelName).then(function() {
-                                    showAlert('模型名称已复制到剪贴板！<br><br>您可以在其他应用中使用此模型名称');
-                                }).catch(function(err) {
-                                    console.error('复制失败:', err);
-                                });
-                            });
-                        } catch (e) {
-                            $('#modelList').html("<p style='color: red;'>处理模型数据时出错：" + e.message + "</p>");
-                        }
-                    },
-                    error: function(error) {
-                        var errorMessage = "模型列表查询出错：";
-                        if(error.status === 401) {
-                            errorMessage += "API Key无效或已过期";
-                        } else if(error.status === 404) {
-                            errorMessage += "API地址错误，请检查URL";
-                        } else if(error.status === 0) {
-                            errorMessage += "无法连接到服务器，请检查网络或URL";
-                        } else if(error.status === 403) {
-                            errorMessage += "没有访问权限";
-                        } else if(error.status === 500) {
-                            errorMessage += "服务器内部错误";
-                        } else {
-                            errorMessage += error.statusText || "未知错误";
-                        }
-                        $('#modelList').html("<p style='color: red;'>" + errorMessage + "</p>");
-                    }
-                });
-
                 // 查询日志
                 $.ajax({
                     url: baseUrl + "/api/log/token",
@@ -633,18 +489,27 @@
                                 allLogs = (response.data || []).reverse();
                                 currentPage = 1;
                                 renderLogs(currentPage);
+                                
+                                // 如果日志查询成功，继续查询余额和模型
+                                queryBalanceAndModels();
                             } else {
                                 allLogs = [];
                                 $('#logList').html("<p style='color: red;'>日志查询失败：" + (response.message || '未知错误') + "</p>");
+                                document.querySelector('#queryBtn').innerText = '查询余额 & 日志 & 模型';
+                                document.querySelector('#queryBtn').disabled = false;
+                                isQuerying = false;
                             }
                         } catch (e) {
                             $('#logList').html("<p style='color: red;'>处理日志数据时出错：" + e.message + "</p>");
+                            document.querySelector('#queryBtn').innerText = '查询余额 & 日志 & 模型';
+                            document.querySelector('#queryBtn').disabled = false;
+                            isQuerying = false;
                         }
                     },
                     error: function(error) {
                         var errorMessage = "日志查询出错：";
                         if(error.status === 401) {
-                            errorMessage += "API Key无效或已过期";
+                            errorMessage += "API Key无效";
                         } else if(error.status === 404) {
                             errorMessage += "API地址错误，请检查URL";
                         } else if(error.status === 0) {
@@ -658,12 +523,183 @@
                         }
                         allLogs = [];
                         $('#logList').html("<p style='color: red;'>" + errorMessage + "</p>");
+                        document.querySelector('#queryBtn').innerText = '查询余额 & 日志 & 模型';
+                        document.querySelector('#queryBtn').disabled = false;
+                        isQuerying = false;
                     }
-                }).always(function() {
-                    document.querySelector('#queryBtn').innerText = '查询余额 & 日志 & 模型';
-                    document.querySelector('#queryBtn').disabled = false;
-                    isQuerying = false;
                 });
+
+                function queryBalanceAndModels() {
+                    // 查询余额
+                    $.when(
+                        $.ajax({
+                            url: baseUrl + "/v1/dashboard/billing/subscription",
+                            headers: headers,
+                            method: 'GET',
+                            timeout: 30000
+                        }),
+                        $.ajax({
+                            url: baseUrl + "/dashboard/billing/usage",
+                            headers: headers,
+                            method: 'GET',
+                            timeout: 30000
+                        })
+                    ).then(function(subscriptionData, balanceData) {
+                        try {
+                            var resultHtml = "<h2>余额查询结果</h2>" +
+                                "<div class='table-container'><table>" +
+                                "<tr>" +
+                                "<th>支付方式是否存在</th>" +
+                                "<th>软额度(美元)</th>" +
+                                "<th>硬额度(美元)</th>" +
+                                "<th>系统硬额度(美元)</th>" +
+                                "<th>访问权限截止时间</th>" +
+                                "<th>总使用量(美元)</th>" +
+                                "</tr>" +
+                                "<tr>" +
+                                "<td>" + (subscriptionData[0].has_payment_method ? "是" : "否") + "</td>" +
+                                "<td>" + (subscriptionData[0].soft_limit_usd || 0) + "</td>" +
+                                "<td>" + (subscriptionData[0].hard_limit_usd || 0) + "</td>" +
+                                "<td>" + (subscriptionData[0].system_hard_limit_usd || 0) + "</td>" +
+                                "<td>" + (subscriptionData[0].access_until ? new Date(subscriptionData[0].access_until * 1000).toLocaleString() : "无限制") + "</td>" +
+                                "<td>" + ((balanceData[0].total_usage || 0) / 100).toFixed(2) + "</td>" +
+                                "</tr>" +
+                                "</table></div>";
+                            
+                            $('#result').html(resultHtml);
+                        } catch (e) {
+                            $('#result').html("<p style='color: red;'>余额查询失败：" + e.message + "</p>");
+                        }
+                    }).fail(function(error) {
+                        var errorMessage = "余额查询失败：";
+                        if(error.status === 401) {
+                            errorMessage += "API Key无效";
+                        } else if(error.status === 404) {
+                            errorMessage += "API地址错误";
+                        } else if(error.status === 0) {
+                            errorMessage += "无法连接到服务器";
+                        } else if(error.status === 403) {
+                            errorMessage += "没有访问权限";
+                        } else if(error.status === 500) {
+                            errorMessage += "服务器内部错误";
+                        } else {
+                            errorMessage += error.statusText || "未知错误";
+                        }
+                        $('#result').html("<p style='color: red;'>" + errorMessage + "</p>");
+                    });
+
+                    // 查询模型列表
+                    $.ajax({
+                        url: baseUrl + "/v1/models",
+                        headers: headers,
+                        method: 'GET',
+                        timeout: 30000,
+                        success: function(response) {
+                            try {
+                                var modelCategories = {
+                                    'OpenAI': [],
+                                    'Claude': [],
+                                    'Google': [],
+                                    'Yi': [],
+                                    'Qwen': [],
+                                    'GLM': [],
+                                    'BAAI': [],
+                                    'DeepSeek': [],
+                                    'InternLM': [],
+                                    'Moonshot': [],
+                                    'Llama': [],
+                                    'Mistral': [],
+                                    'Google': [],
+                                    'Other': []
+                                };
+
+                                response.data.forEach(function(model) {
+                                    if(model.permission) {
+                                        var id = (model.id || '').toLowerCase();
+                                        var safeId = sanitizeInput(model.id || '');
+                                        if (id.includes('gpt')) {
+                                            modelCategories['OpenAI'].push(safeId);
+                                        } else if (id.includes('claude')) {
+                                            modelCategories['Claude'].push(safeId);
+                                        } else if (id.includes('gemma') || id.includes('google')) {
+                                            modelCategories['Google'].push(safeId);
+                                        } else if (id.includes('yi-')) {
+                                            modelCategories['Yi'].push(safeId);
+                                        } else if (id.includes('qwen')) {
+                                            modelCategories['Qwen'].push(safeId);
+                                        } else if (id.includes('glm')) {
+                                            modelCategories['GLM'].push(safeId);
+                                        } else if (id.includes('baai')) {
+                                            modelCategories['BAAI'].push(safeId);
+                                        } else if (id.includes('deepseek')) {
+                                            modelCategories['DeepSeek'].push(safeId);
+                                        } else if (id.includes('internlm')) {
+                                            modelCategories['InternLM'].push(safeId);
+                                        } else if (id.includes('moonshot')) {
+                                            modelCategories['Moonshot'].push(safeId);
+                                        } else if (id.includes('llama')) {
+                                            modelCategories['Llama'].push(safeId);
+                                        } else if (id.includes('mistral')) {
+                                            modelCategories['Mistral'].push(safeId);
+                                        } else if (id.includes('gemini')) {
+                                            modelCategories['Google'].push(safeId);
+                                        } else {
+                                            modelCategories['Other'].push(safeId);
+                                        }
+                                    }
+                                });
+
+                                var modelListHtml = "";
+                                for (var category in modelCategories) {
+                                    if (modelCategories[category].length > 0) {
+                                        modelListHtml += "<div class='model-category'><h3>" + category + "</h3><div class='model-list'>";
+                                        modelCategories[category].forEach(function(model) {
+                                            modelListHtml += "<span class='model-item' data-model='" + model + "'>" + model + "</span>";
+                                        });
+                                        modelListHtml += "</div></div>";
+                                    }
+                                }
+                                $('#modelList').html(modelListHtml);
+                                
+                                // 显示折叠按钮
+                                $('.collapsible').css('display', 'flex');
+
+                                // 为模型名称添加点击事件
+                                $('.model-item').click(function() {
+                                    var modelName = $(this).data('model');
+                                    navigator.clipboard.writeText(modelName).then(function() {
+                                        showAlert('模型名称已复制到剪贴板！<br><br>您可以在其他应用中使用此模型名称');
+                                    }).catch(function(err) {
+                                        console.error('复制失败:', err);
+                                    });
+                                });
+                            } catch (e) {
+                                $('#modelList').html("<p style='color: red;'>获取模型列表失败：" + e.message + "</p>");
+                            }
+                        },
+                        error: function(error) {
+                            var errorMessage = "获取模型列表失败：";
+                            if(error.status === 401) {
+                                errorMessage += "API Key无效";
+                            } else if(error.status === 404) {
+                                errorMessage += "API地址错误";
+                            } else if(error.status === 0) {
+                                errorMessage += "无法连接到服务器";
+                            } else if(error.status === 403) {
+                                errorMessage += "没有访问权限";
+                            } else if(error.status === 500) {
+                                errorMessage += "服务器内部错误";
+                            } else {
+                                errorMessage += error.statusText || "未知错误";
+                            }
+                            $('#modelList').html("<p style='color: red;'>" + errorMessage + "</p>");
+                        }
+                    }).always(function() {
+                        document.querySelector('#queryBtn').innerText = '查询余额 & 日志 & 模型';
+                        document.querySelector('#queryBtn').disabled = false;
+                        isQuerying = false;
+                    });
+                }
             });
 
             function showAlert(message) {
